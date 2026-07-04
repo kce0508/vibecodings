@@ -2,7 +2,7 @@
 
 ## VibeCoding with Codex/Cursor/Claude Code/Gemini
 
-### AI에게 제대로 코딩을 시키자!
+### AI에게 제대로 코딩을 시키자 1
 
 #### 1. 핵심 개념
 
