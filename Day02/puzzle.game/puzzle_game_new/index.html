@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Game</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: rgba(255, 255, 255, 0.92);
+      --text: #243042;
+      --muted: #758196;
+      --accent: #2f6df6;
+      --accent-dark: #2457c4;
+      --success: #1f7a4d;
+      --danger: #c73d3d;
+      --panel: rgba(255, 255, 255, 0.98);
+      --tile: #c7f4d3;
+      --tile-border: #a7e3b8;
+      --tile-shadow: rgba(88, 145, 110, 0.18);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top, rgba(47, 109, 246, 0.08), transparent 32%),
+        linear-gradient(180deg, #fbfcff 0%, var(--bg) 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .app {
+      width: min(100%, 640px);
+      background: var(--card);
+      border-radius: 28px;
+      padding: 28px 22px 24px;
+      box-shadow: 0 18px 48px rgba(31, 41, 55, 0.12);
+      backdrop-filter: blur(10px);
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(26px, 4vw, 34px);
+      letter-spacing: -0.03em;
+    }
+
+    .subtitle {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 18px 0 14px;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .stats {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .tries,
+    .score,
+    .timer,
+    .level {
+      color: #303948;
+    }
+
+    .timer.warn { color: #c77b00; }
+    .timer.danger { color: var(--danger); }
+
+    .level {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .level label { white-space: nowrap; }
+
+    .level-select {
+      appearance: none;
+      border: 1px solid rgba(47, 109, 246, 0.18);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+      padding: 8px 12px;
+      min-width: 110px;
+    }
+
+    .restart {
+      appearance: none;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      padding: 10px 16px;
+      cursor: pointer;
+      box-shadow: 0 10px 20px rgba(47, 109, 246, 0.22);
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .restart:hover {
+      background: var(--accent-dark);
+      transform: translateY(-1px);
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(var(--board-size, 3), 1fr);
+      gap: 10px;
+      min-height: 200px;
+    }
+
+    .tile {
+      aspect-ratio: 1 / 1;
+      border: 1px solid var(--tile-border);
+      border-radius: 16px;
+      background: linear-gradient(180deg, #d8fae0 0%, var(--tile) 100%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 4px 12px var(--tile-shadow);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: var(--tile-font-size, 30px);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+      user-select: none;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .tile::after {
+      content: '?';
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: 28px;
+      font-weight: 800;
+      color: rgba(255, 255, 255, 0.8);
+      text-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+      opacity: 1;
+      transition: opacity 0.2s ease;
+    }
+
+    .tile.revealed::after,
+    .tile.matched::after { opacity: 0; }
+
+    .tile.revealed {
+      transform: scale(1.03);
+      box-shadow: 0 8px 18px rgba(64, 164, 103, 0.24);
+    }
+
+    .tile.matched {
+      cursor: default;
+      filter: saturate(1.05);
+      box-shadow: 0 8px 18px rgba(31, 122, 77, 0.22);
+    }
+
+    .tile.empty {
+      cursor: default;
+      border: 1px dashed rgba(167, 227, 184, 0.55);
+      background: rgba(199, 244, 211, 0.24);
+      box-shadow: none;
+      pointer-events: none;
+    }
+
+    .tile.empty::after { content: ''; }
+
+    .status {
+      margin-top: 16px;
+      min-height: 24px;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--success);
+    }
+
+    .status.neutral {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: rgba(18, 24, 38, 0.44);
+      backdrop-filter: blur(6px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease;
+      z-index: 50;
+      padding: 20px;
+    }
+
+    .overlay.visible {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .overlay-panel {
+      width: min(92vw, 420px);
+      border-radius: 26px;
+      background: var(--panel);
+      box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+      text-align: center;
+      padding: 28px 24px 24px;
+      transform: scale(0.94);
+      animation: pop-badge 0.32s ease forwards;
+    }
+
+    .overlay-title {
+      margin: 0;
+      font-size: clamp(30px, 6vw, 56px);
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      color: var(--accent-dark);
+    }
+
+    .overlay-text {
+      margin: 12px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 24px;
+    }
+
+    .overlay-button {
+      margin-top: 20px;
+      appearance: none;
+      border: 0;
+      border-radius: 14px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 800;
+      padding: 12px 18px;
+      cursor: pointer;
+      box-shadow: 0 10px 20px rgba(47, 109, 246, 0.24);
+      transition: transform 0.15s ease, background 0.15s ease;
+    }
+
+    .overlay-button:hover {
+      background: var(--accent-dark);
+      transform: translateY(-1px);
+    }
+
+    .overlay.clear .overlay-title { color: var(--success); }
+    .overlay.over .overlay-title { color: var(--danger); }
+    .overlay.start .overlay-title { color: var(--accent-dark); }
+
+    @keyframes pop-badge {
+      to { transform: scale(1); }
+    }
+
+    @media (max-width: 480px) {
+      .app {
+        padding: 22px 16px 18px;
+        border-radius: 22px;
+      }
+
+      .topbar { gap: 10px; }
+      .stats { gap: 10px; }
+
+      .level {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .level-select { min-width: 102px; }
+      .restart { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1 id="game_title"></h1>
+      <p id="game_subtitle" class="subtitle"></p>
+    </header>
+
+    <section class="topbar" aria-label="game status">
+      <div class="stats">
+        <div class="tries"><span id="tries_label"></span>: <span id="tries_count">0</span></div>
+        <div class="score"><span id="score_label"></span>: <span id="score_count">0</span></div>
+        <div class="timer" id="timer_display"><span id="timer_label"></span>: <span id="timer_count">00:00</span></div>
+        <div class="level">
+          <label id="level_label" for="level_select"></label>
+          <select id="level_select" class="level-select">
+            <option value="easy"></option>
+            <option value="medium1"></option>
+            <option value="medium2"></option>
+            <option value="hard"></option>
+          </select>
+        </div>
+      </div>
+      <button id="restart_button" class="restart" type="button"></button>
+    </section>
+
+    <section id="board" class="board" aria-label="puzzle board"></section>
+    <div id="status" class="status neutral"></div>
+  </main>
+
+  <div id="stage_overlay" class="overlay start visible" aria-hidden="false">
+    <div class="overlay-panel">
+      <h2 id="stage_overlay_title" class="overlay-title"></h2>
+      <p id="stage_overlay_text" class="overlay-text"></p>
+      <button id="stage_overlay_button" class="overlay-button" type="button"></button>
+    </div>
+  </div>
+
+  <script>
+    const T = {
+      title: '\uAC04\uB2E8\uD55C \uB3D9\uBB3C \uB9DE\uCD94\uAE30 \uAC8C\uC784',
+      subtitle: '\uAC19\uC740 \uADF8\uB9BC 2\uAC1C\uB97C \uCC3E\uC544 \uBAA8\uB450 \uB9DE\uCD94\uC138\uC694. \uB09C\uC774\uB3C4\uB294 \uC27D\uC74C\uBD80\uD130 \uC5B4\uB824\uC6C0\uAE4C\uC9C0 \uB2E8\uACC4\uBCC4\uB85C \uC62C\uB77C\uAC11\uB2C8\uB2E4.',
+      tries: '\uC2DC\uB3C4 \uD69F\uC218',
+      score: '\uC810\uC218',
+      time: '\uC2DC\uAC04',
+      level: '\uB09C\uC774\uB3C4',
+      easy: '\uC26C\uC6C0',
+      medium1: '\uC911\uAC04 1',
+      medium2: '\uC911\uAC04 2',
+      hard: '\uC5B4\uB824\uC6C0',
+      startButton: '\uC2DC\uC791\uD558\uAE30',
+      restartButton: '\uCC98\uC74C\uC73C\uB85C',
+      beginStatus: '\uC2DC\uC791 \uBC84\uD2BC\uC744 \uB20C\uB7EC \uAC8C\uC784\uC744 \uC2DC\uC791\uD558\uC138\uC694.',
+      startOverlayTitle: '\uAC8C\uC784 \uC2DC\uC791',
+      startOverlayText: '\uC900\uBE44\uAC00 \uB418\uBA74 \uC2DC\uC791\uD558\uAE30 \uBC84\uD2BC\uC744 \uB20C\uB7EC\uC8FC\uC138\uC694.',
+      startGameStatus: '\uAC19\uC740 \uADF8\uB9BC 2\uAC1C\uB97C \uCC3E\uC544\uBCF4\uC138\uC694.',
+      levelUp: 'LEVEL UP!!',
+      levelUpText: '\uB2E4\uC74C \uB2E8\uACC4\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4.',
+      levelLabelText: (label) => `${label} \uB2E8\uACC4\uC785\uB2C8\uB2E4.`,
+      matched: '\uB9DE\uCDB0\uC2B5\uB2C8\uB2E4!',
+      keepGoing: '\uACC4\uC18D \uB3C4\uC804\uD574\uBCF4\uC138\uC694.',
+      mismatch: '\uB2E4\uC2DC \uD55C \uBC88 \uC2DC\uB3C4\uD574\uBCF4\uC138\uC694.',
+      gameOver: 'GAME OVER',
+      gameOverText: '\uC2DC\uAC04\uC774 \uBAA8\uB450 \uC18C\uC9C4\uB418\uC5C8\uC2B5\uB2C8\uB2E4.',
+      gameClear: 'GAME CLEAR!!',
+      gameClearText: '\uBAA8\uB4E0 \uB2E8\uACC4\uB97C \uD1B5\uACFC\uD588\uC2B5\uB2C8\uB2E4.',
+      nextStageText: (label) => `${label} \uB2E8\uACC4\uB85C \uC774\uB3D9\uD569\uB2C8\uB2E4.`,
+      nextStageStatus: (label) => `${label} \uB2E8\uACC4\uC785\uB2C8\uB2E4.`
+    };
+
+    const animals = [
+      '\u{1F436}', '\u{1F431}', '\u{1F42D}', '\u{1F439}',
+      '\u{1F430}', '\u{1F98A}', '\u{1F43B}', '\u{1F43C}',
+      '\u{1F428}', '\u{1F42F}', '\u{1F981}', '\u{1F438}',
+      '\u{1F435}', '\u{1F414}', '\u{1F427}', '\u{1F426}',
+      '\u{1F423}', '\u{1F984}', '\u{1F41F}', '\u{1F42C}',
+      '\u{1F99D}', '\u{1F422}', '\u{1F419}', '\u{1F98B}'
+    ];
+
+    const level_order = ['easy', 'medium1', 'medium2', 'hard'];
+    const level_options = {
+      easy: { label: T.easy, size: 3, timeLimit: 45 },
+      medium1: { label: T.medium1, size: 4, timeLimit: 60 },
+      medium2: { label: T.medium2, size: 5, timeLimit: 75 },
+      hard: { label: T.hard, size: 6, timeLimit: 90 }
+    };
+
+    const board_element = document.getElementById('board');
+    const tries_count_element = document.getElementById('tries_count');
+    const score_count_element = document.getElementById('score_count');
+    const timer_display_element = document.getElementById('timer_display');
+    const timer_count_element = document.getElementById('timer_count');
+    const status_element = document.getElementById('status');
+    const level_select_element = document.getElementById('level_select');
+    const restart_button = document.getElementById('restart_button');
+    const stage_overlay_element = document.getElementById('stage_overlay');
+    const stage_overlay_title_element = document.getElementById('stage_overlay_title');
+    const stage_overlay_text_element = document.getElementById('stage_overlay_text');
+    const stage_overlay_button_element = document.getElementById('stage_overlay_button');
+    const game_title_element = document.getElementById('game_title');
+    const game_subtitle_element = document.getElementById('game_subtitle');
+    const tries_label_element = document.getElementById('tries_label');
+    const score_label_element = document.getElementById('score_label');
+    const timer_label_element = document.getElementById('timer_label');
+    const level_label_element = document.getElementById('level_label');
+
+    let current_level_key = 'easy';
+    let current_board_size = 3;
+    let current_time_limit_seconds = 45;
+    let empty_cell_count = 1;
+    let cards = [];
+    let first_picked_card = null;
+    let second_picked_card = null;
+    let matched_count = 0;
+    let tries_count = 0;
+    let score_count = 0;
+    let time_left_seconds = 45;
+    let board_locked = false;
+    let game_started = false;
+    let game_finished = false;
+    let timer_interval_id = null;
+    let stage_transition_timeout_id = null;
+    let pending_timeouts = [];
+    let overlay_button_handler = null;
+
+    function apply_localized_text() {
+      document.title = T.title;
+      game_title_element.textContent = T.title;
+      game_subtitle_element.textContent = T.subtitle;
+      tries_label_element.textContent = T.tries;
+      score_label_element.textContent = T.score;
+      timer_label_element.textContent = T.time;
+      level_label_element.textContent = T.level;
+      restart_button.textContent = T.startButton;
+      level_select_element.options[0].textContent = T.easy;
+      level_select_element.options[1].textContent = T.medium1;
+      level_select_element.options[2].textContent = T.medium2;
+      level_select_element.options[3].textContent = T.hard;
+    }
+
+    function get_level_config(level_key) {
+      return level_options[level_key] || level_options.easy;
+    }
+
+    function get_next_level_key(level_key) {
+      const index = level_order.indexOf(level_key);
+      if (index === -1 || index === level_order.length - 1) {
+        return null;
+      }
+      return level_order[index + 1];
+    }
+
+    function shuffle_array(array) {
+      return [...array].sort(() => Math.random() - 0.5);
+    }
+
+    function update_status(message, neutral = false) {
+      status_element.textContent = message;
+      status_element.classList.toggle('neutral', neutral);
+    }
+
+    function update_tries_count() {
+      tries_count_element.textContent = String(tries_count);
+    }
+
+    function update_score_count() {
+      score_count_element.textContent = String(score_count);
+    }
+
+    function format_time(seconds) {
+      const safe_seconds = Math.max(0, seconds);
+      const minutes = Math.floor(safe_seconds / 60);
+      const remaining_seconds = safe_seconds % 60;
+      return `${String(minutes).padStart(2, '0')}:${String(remaining_seconds).padStart(2, '0')}`;
+    }
+
+    function update_timer_display() {
+      timer_count_element.textContent = format_time(time_left_seconds);
+      timer_display_element.classList.toggle('danger', time_left_seconds <= 10);
+      timer_display_element.classList.toggle('warn', time_left_seconds > 10 && time_left_seconds <= 30);
+    }
+
+    function stop_timer() {
+      if (timer_interval_id !== null) {
+        clearInterval(timer_interval_id);
+        timer_interval_id = null;
+      }
+    }
+
+    function start_timer() {
+      stop_timer();
+      update_timer_display();
+
+      timer_interval_id = setInterval(() => {
+        if (game_finished || !game_started) {
+          stop_timer();
+          return;
+        }
+
+        time_left_seconds -= 1;
+        if (time_left_seconds <= 0) {
+          time_left_seconds = 0;
+          update_timer_display();
+          finish_game();
+          return;
+        }
+
+        update_timer_display();
+      }, 1000);
+    }
+
+    function clear_pending_timeouts() {
+      pending_timeouts.forEach((timeout_id) => clearTimeout(timeout_id));
+      pending_timeouts = [];
+    }
+
+    function schedule_timeout(callback, delay) {
+      const timeout_id = setTimeout(() => {
+        pending_timeouts = pending_timeouts.filter((id) => id !== timeout_id);
+        callback();
+      }, delay);
+      pending_timeouts.push(timeout_id);
+      return timeout_id;
+    }
+
+    function clear_stage_transition_timeout() {
+      if (stage_transition_timeout_id !== null) {
+        clearTimeout(stage_transition_timeout_id);
+        stage_transition_timeout_id = null;
+      }
+    }
+
+    function set_overlay_button(label, handler, visible = true) {
+      overlay_button_handler = handler || null;
+      stage_overlay_button_element.textContent = label;
+      stage_overlay_button_element.hidden = !visible;
+    }
+
+    function show_overlay(title, text = '', mode = '', button = null) {
+      stage_overlay_title_element.textContent = title;
+      stage_overlay_text_element.textContent = text;
+      stage_overlay_element.classList.remove('start', 'clear', 'over');
+      if (mode) {
+        stage_overlay_element.classList.add(mode);
+      }
+      if (button) {
+        set_overlay_button(button.label, button.onClick, true);
+      } else {
+        set_overlay_button('', null, false);
+      }
+      stage_overlay_element.classList.add('visible');
+      stage_overlay_element.setAttribute('aria-hidden', 'false');
+    }
+
+    function hide_overlay() {
+      stage_overlay_element.classList.remove('visible', 'start', 'clear', 'over');
+      stage_overlay_element.setAttribute('aria-hidden', 'true');
+    }
+
+    function create_cards() {
+      const pair_count = Math.floor((current_board_size * current_board_size) / 2);
+      const selected_symbols = shuffle_array(animals).slice(0, pair_count);
+      const deck = shuffle_array([...selected_symbols, ...selected_symbols]);
+      cards = deck.map((symbol, index) => ({
+        id: index,
+        symbol,
+        is_revealed: false,
+        is_matched: false
+      }));
+    }
+
+    function sync_level_state(level_key) {
+      current_level_key = level_key;
+      const level_config = get_level_config(level_key);
+      current_board_size = level_config.size;
+      current_time_limit_seconds = level_config.timeLimit;
+      const total_cells = current_board_size * current_board_size;
+      empty_cell_count = total_cells - Math.floor(total_cells / 2) * 2;
+      board_element.style.setProperty('--board-size', String(current_board_size));
+      board_element.style.setProperty('--tile-font-size', `${Math.max(18, 42 - current_board_size * 4)}px`);
+      level_select_element.value = level_key;
+    }
+
+    function render_board() {
+      board_element.innerHTML = '';
+      board_element.style.setProperty('--board-size', String(current_board_size));
+      board_element.style.setProperty('--tile-font-size', `${Math.max(18, 42 - current_board_size * 4)}px`);
+
+      cards.forEach((card) => {
+        const card_button = document.createElement('button');
+        card_button.type = 'button';
+        card_button.className = 'tile';
+        card_button.setAttribute('aria-label', 'card');
+        card_button.textContent = card.is_revealed || card.is_matched ? card.symbol : '';
+
+        if (card.is_revealed) card_button.classList.add('revealed');
+        if (card.is_matched) {
+          card_button.classList.add('matched');
+          card_button.disabled = true;
+        }
+
+        if (!game_started || game_finished || (board_locked && !card.is_revealed)) {
+          card_button.disabled = true;
+        }
+
+        card_button.addEventListener('click', () => handle_card_click(card.id));
+        board_element.appendChild(card_button);
+      });
+
+      for (let index = 0; index < empty_cell_count; index += 1) {
+        const empty_tile = document.createElement('div');
+        empty_tile.className = 'tile empty';
+        empty_tile.setAttribute('aria-hidden', 'true');
+        board_element.appendChild(empty_tile);
+      }
+    }
+
+    function reset_round_state() {
+      first_picked_card = null;
+      second_picked_card = null;
+      board_locked = false;
+      matched_count = 0;
+      time_left_seconds = current_time_limit_seconds;
+      create_cards();
+      update_timer_display();
+      render_board();
+    }
+
+    function start_new_game() {
+      clear_stage_transition_timeout();
+      clear_pending_timeouts();
+      stop_timer();
+      game_started = true;
+      game_finished = false;
+      tries_count = 0;
+      score_count = 0;
+      update_tries_count();
+      update_score_count();
+      sync_level_state('easy');
+      reset_round_state();
+      level_select_element.disabled = true;
+      restart_button.textContent = T.restartButton;
+      update_status(T.startGameStatus, true);
+      hide_overlay();
+      start_timer();
+    }
+
+    function return_to_start_screen() {
+      clear_stage_transition_timeout();
+      clear_pending_timeouts();
+      stop_timer();
+      game_started = false;
+      game_finished = false;
+      tries_count = 0;
+      score_count = 0;
+      update_tries_count();
+      update_score_count();
+      level_select_element.disabled = false;
+      restart_button.textContent = T.startButton;
+      sync_level_state('easy');
+      reset_round_state();
+      update_status(T.beginStatus, true);
+      show_overlay(T.startOverlayTitle, T.startOverlayText, 'start', {
+        label: T.startButton,
+        onClick: start_new_game
+      });
+    }
+
+    function finish_game() {
+      if (game_finished) return;
+      game_finished = true;
+      board_locked = true;
+      stop_timer();
+      clear_pending_timeouts();
+      clear_stage_transition_timeout();
+      render_board();
+      update_status(T.gameOver, false);
+      show_overlay(T.gameOver, T.gameOverText, 'over', {
+        label: T.restartButton,
+        onClick: return_to_start_screen
+      });
+    }
+
+    function complete_stage() {
+      if (game_finished) return;
+
+      const next_level_key = get_next_level_key(current_level_key);
+      game_finished = true;
+      board_locked = true;
+      stop_timer();
+      clear_pending_timeouts();
+      clear_stage_transition_timeout();
+      render_board();
+
+      if (!next_level_key) {
+        update_status(T.gameClear, false);
+        show_overlay(T.gameClear, T.gameClearText, 'clear', {
+          label: T.restartButton,
+          onClick: return_to_start_screen
+        });
+        return;
+      }
+
+      update_status(T.levelUp, false);
+      show_overlay(T.levelUp, T.levelUpText, 'start');
+
+      stage_transition_timeout_id = setTimeout(() => {
+        stage_transition_timeout_id = null;
+        game_finished = false;
+        sync_level_state(next_level_key);
+        reset_round_state();
+        update_status(T.nextStageStatus(level_options[next_level_key].label), true);
+        hide_overlay();
+        start_timer();
+      }, 1200);
+    }
+
+    function handle_match() {
+      first_picked_card.is_matched = true;
+      second_picked_card.is_matched = true;
+      matched_count += 2;
+      score_count += 10;
+      update_score_count();
+      first_picked_card = null;
+      second_picked_card = null;
+      render_board();
+      update_status(T.matched, false);
+
+      schedule_timeout(() => {
+        if (game_started && !game_finished && matched_count !== cards.length) {
+          update_status(T.keepGoing, true);
+        }
+      }, 700);
+
+      schedule_timeout(() => {
+        if (!game_finished) {
+          check_game_complete();
+        }
+      }, 180);
+    }
+
+    function handle_mismatch() {
+      board_locked = true;
+      update_status(T.mismatch, true);
+
+      schedule_timeout(() => {
+        if (first_picked_card) first_picked_card.is_revealed = false;
+        if (second_picked_card) second_picked_card.is_revealed = false;
+        first_picked_card = null;
+        second_picked_card = null;
+        board_locked = false;
+        render_board();
+      }, 700);
+    }
+
+    function check_game_complete() {
+      if (matched_count === cards.length) {
+        complete_stage();
+      }
+    }
+
+    function handle_card_click(card_id) {
+      if (!game_started || board_locked || game_finished) return;
+
+      const clicked_card = cards.find((card) => card.id === card_id);
+      if (!clicked_card || clicked_card.is_revealed || clicked_card.is_matched) return;
+
+      clicked_card.is_revealed = true;
+
+      if (!first_picked_card) {
+        first_picked_card = clicked_card;
+        render_board();
+        return;
+      }
+
+      second_picked_card = clicked_card;
+      tries_count += 1;
+      update_tries_count();
+      render_board();
+
+      if (first_picked_card.symbol === second_picked_card.symbol) {
+        handle_match();
+        return;
+      }
+
+      handle_mismatch();
+    }
+
+    function refresh_restart_button() {
+      restart_button.textContent = game_started ? T.restartButton : T.startButton;
+    }
+
+    function init_game() {
+      apply_localized_text();
+      sync_level_state('easy');
+      reset_round_state();
+      game_started = false;
+      game_finished = false;
+      level_select_element.disabled = false;
+      refresh_restart_button();
+      update_tries_count();
+      update_score_count();
+      update_status(T.beginStatus, true);
+      show_overlay(T.startOverlayTitle, T.startOverlayText, 'start', {
+        label: T.startButton,
+        onClick: start_new_game
+      });
+    }
+
+    restart_button.addEventListener('click', () => {
+      if (game_started) {
+        return_to_start_screen();
+        return;
+      }
+      start_new_game();
+    });
+
+    level_select_element.addEventListener('change', (event) => {
+      if (game_started) {
+        event.target.value = current_level_key;
+        return;
+      }
+      sync_level_state(event.target.value);
+      reset_round_state();
+    });
+
+    stage_overlay_button_element.addEventListener('click', () => {
+      if (overlay_button_handler) {
+        overlay_button_handler();
+      }
+    });
+
+    init_game();
+  </script>
+</body>
+</html>
